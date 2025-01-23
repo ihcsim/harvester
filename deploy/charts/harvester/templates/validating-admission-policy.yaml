@@ -1,0 +1,35 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: immutable-harvester-helpers
+  labels:
+{{ include "harvester.labels" . | indent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values: ["harvester-system"]
+    resourceRules:
+    - apiGroups:   [""]
+      apiVersions: ["v1"]
+      operations:  ["UPDATE"]
+      resources:   ["configmaps"]
+      resourceNames: ["harvester-helpers"]
+      scope: Namespaced
+  validations:
+  - expression: "oldObject.data['promote.sh'] == object.data['promote.sh']"
+    message: "the promote.sh configuration is immutable"
+    reason: Invalid
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: immutable-harvester-helpers
+  labels:
+{{ include "harvester.labels" . | indent 4 }}
+spec:
+  policyName: immutable-harvester-helpers
+  validationActions: [Deny]
