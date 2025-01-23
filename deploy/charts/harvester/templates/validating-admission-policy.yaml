@@ -1,7 +1,7 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: immutable-harvester-helpers
+  name: harvester-immutable-promote-cidr
   labels:
 {{ include "harvester.labels" . | indent 4 }}
 spec:
@@ -19,17 +19,70 @@ spec:
       resources:   ["configmaps"]
       resourceNames: ["harvester-helpers"]
       scope: Namespaced
+  variables:
+  - name: newData
+    expression: |-
+      'promote.sh' in object.data ? object.data['promote.sh'] : ''
+  - name: oldData
+    expression: |-
+      'promote.sh' in oldObject.data ? oldObject.data['promote.sh'] : ''
+  - name: newClusterCIDR
+    expression: |-
+      variables.newData.indexOf('cluster-cidr:') > -1 ?
+      variables.newData.substring(
+        variables.newData.indexOf('cluster-cidr:') + 'cluster-cidr:'.size() + 1,
+        variables.newData.indexOf('\n', variables.newData.indexOf('cluster-cidr:'))).
+        trim() : ''
+  - name: oldClusterCIDR
+    expression: |-
+      variables.oldData.indexOf('cluster-cidr:') > -1 ?
+      variables.oldData.substring(
+        variables.oldData.indexOf('cluster-cidr:') + 'cluster-cidr:'.size() + 1,
+        variables.oldData.indexOf('\n', variables.oldData.indexOf('cluster-cidr:'))).
+        trim() : ''
+  - name: newServiceCIDR
+    expression: |-
+      variables.newData.indexOf('service-cidr:') > -1 ?
+      variables.newData.substring(
+        variables.newData.indexOf('service-cidr:') + 'service-cidr:'.size() + 1,
+        variables.newData.indexOf('\n', variables.newData.indexOf('service-cidr:'))).
+        trim() : ''
+  - name: oldServiceCIDR
+    expression: |-
+      variables.oldData.indexOf('service-cidr:') > -1 ?
+      variables.oldData.substring(
+        variables.oldData.indexOf('service-cidr:') + 'service-cidr:'.size() + 1,
+        variables.oldData.indexOf('\n', variables.oldData.indexOf('service-cidr:'))).
+        trim() : ''
+  - name: newClusterDNS
+    expression: |-
+      variables.newData.indexOf('cluster-dns:') > -1 ?
+      variables.newData.substring(
+        variables.newData.indexOf('cluster-dns:') + 'cluster-dns:'.size() + 1,
+        variables.newData.indexOf('\n', variables.newData.indexOf('cluster-dns:'))).
+        trim() : ''
+  - name: oldClusterDNS
+    expression: |-
+      variables.oldData.indexOf('cluster-dns:') > -1 ?
+      variables.oldData.substring(
+        variables.oldData.indexOf('cluster-dns:') + 'cluster-dns:'.size() + 1,
+        variables.oldData.indexOf('\n', variables.oldData.indexOf('cluster-dns:'))).
+        trim() : ''
   validations:
-  - expression: "oldObject.data['promote.sh'] == object.data['promote.sh']"
-    message: "the promote.sh configuration is immutable"
+  - expression: variables.newClusterCIDR == variables.oldClusterCIDR && variables.newServiceCIDR == variables.oldServiceCIDR && variables.newClusterDNS == variables.oldClusterDNS
+    messageExpression: |-
+      'the promote.sh configuration is immutable. ' +
+      'clusterCIDR: ' + variables.oldClusterCIDR + ' => ' + variables.newClusterCIDR + ', ' +
+      'serviceCIDR:' + variables.oldServiceCIDR + ' => ' + variables.newServiceCIDR + ', ' +
+      'clusterDNS: ' + variables.oldClusterDNS + ' => ' + variables.newClusterDNS
     reason: Invalid
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: immutable-harvester-helpers
+  name: harvester-immutable-promote-cidr
   labels:
 {{ include "harvester.labels" . | indent 4 }}
 spec:
-  policyName: immutable-harvester-helpers
+  policyName: harvester-immutable-promote-cidr
   validationActions: [Deny]
