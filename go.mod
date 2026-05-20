@@ -67,6 +67,7 @@ require (
 	github.com/harvester/harvester-network-controller v1.6.0-rc3
 	github.com/harvester/node-manager v1.6.0-rc3
 	github.com/iancoleman/strcase v0.2.0
+	github.com/satori/go.uuid v1.2.0
 	github.com/k3s-io/helm-controller v0.16.1
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	github.com/k8snetworkplumbingwg/whereabouts v0.9.3
