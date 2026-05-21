@@ -61,6 +61,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.12.2
 	github.com/go-errors/errors v1.4.2
 	github.com/gobuffalo/flect v1.0.3
+	github.com/golang/protobuf v1.5.4
 	github.com/gorilla/mux v1.8.1
 	github.com/guonaihong/gout v0.1.3
 	github.com/harvester/go-common v0.0.0-20260119194217-0f17176ce67e
@@ -205,7 +206,6 @@ require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/gomodule/redigo v2.0.0+incompatible // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/cel-go v0.26.0 // indirect
