@@ -30,5 +30,8 @@ jobs:
           install-mode: binary
           skip-cache: true
 
+      - name: Install shellcheck
+        run: apt install shellcheck
+
       - name: Build (verify compilation)
         run: go build ./...

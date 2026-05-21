@@ -46,6 +46,8 @@ When adding or modifying a type in `pkg/apis/harvesterhci.io/v1beta1/`:
 
 When reviewing any pull request, perform the following security checks on all changed Go files (skip `vendor/`, `pkg/generated/`, `*zz_generated*`, `*_generated*`).
 
+Always provide a security summary in the review comment, even if no issues are found.
+
 ### 1. Evaluate active gosec rules
 
 Check changed code against every gosec rule that is **not** suppressed in `.golangci.yaml`. The currently suppressed rules are G108, G401, G402  — all others are in force. Pay particular attention to:
@@ -85,54 +87,53 @@ govulncheck github.com/harvester/harvester/<changed-package-path>/...
 
 Report any vulnerabilities found: CVE ID, affected symbol, affected package, and whether the vulnerable code path is reachable from the changed code. If `govulncheck` reports a vulnerability in a transitive dependency that the PR did not introduce, note it but mark it as pre-existing.
 
-### 3. Summary format
+### 3. Check shell script vulnerabilities
+
+When changes are made to shell scripts in the `scripts/` or `package/` folders, review them for common shell script security vulnerabilities.
+
+The `shellcheck` tool can be used to automate some of this analysis:
+
+```bash
+
+| Issue | What to look for |
+|-------|-----------------|
+| **Unquoted variables** | Variables used without quotes (e.g., `$var` instead of `"$var"`) — can cause word splitting and glob expansion |
+| **Command injection** | User input or variables interpolated into commands without sanitization — especially with `eval`, backticks, or `$(...)` |
+| **Path traversal** | File paths constructed from input without validation — check for `..` sequences and absolute path handling |
+| **Unsafe `eval`** | Any use of `eval` with user-controlled input or variables |
+| **Unchecked commands** | Commands that can fail silently — ensure `set -e` or explicit error checking with `|| exit 1` |
+| **Insecure temp files** | Predictable temp file names instead of `mktemp` — can lead to race conditions |
+| **World-writable files** | Files/directories created with overly permissive permissions (666, 777) |
+| **Missing input validation** | Script arguments (`$1`, `$2`, etc.) used without validation or bounds checking |
+| **Unsafe downloads** | `curl` or `wget` without integrity checks (checksum validation) or used with `| sh` |
+| **Secret exposure** | Secrets/credentials in script output, logs, or error messages |
+| **Missing ShellCheck** | Scripts not validated with ShellCheck — recommend running `shellcheck script.sh` |
+
+**Common safe patterns:**
+
+- Always quote variables: `"$VAR"` not `$VAR`
+- Use `set -euo pipefail` at script start for safer error handling
+- Validate arguments: `[[ -z "${1:-}" ]] && { echo "Error: missing argument"; exit 1; }`
+- Use `mktemp` for temporary files: `temp_file=$(mktemp)`
+- Check command success: `command || { echo "command failed"; exit 1; }`
+- Use arrays for commands with arguments: `cmd=("binary" "arg1" "arg2"); "${cmd[@]}"`
+
+For each shell script finding, cite the file, line number, issue type, and recommended fix.
+
+### 4. Summary format
 
 After the checks, include a security summary block in your review:
 
 ```
+
 **Security review**
+
 - gosec (active rules): [PASS | N findings — list rule IDs]
 - govulncheck: [PASS | N vulnerabilities — list CVE IDs]
+- shell scripts (scripts/, package/): [PASS | N issues — list types] (if applicable)
 - Pre-existing issues noted: [none | list]
+
 ```
-
-## Go Security Best Practices
-
-`gosec` is enabled in `.golangci.yaml`. The following rules are active (some are explicitly excluded — see `.golangci.yaml` `gosec.excludes`):
-
-**Input validation and injection**
-
-- Validate and sanitize all inputs that flow into file paths, shell commands, or Kubernetes resource names — never interpolate user-supplied strings directly
-- Use `filepath.Clean` on any path derived from external input; reject paths containing `..` traversal sequences
-- Prefer `exec.CommandContext` over `exec.Command` so long-running subprocesses can be cancelled
-
-**Credentials and secrets**
-
-- Never hardcode credentials, tokens, or private keys in source code (G101 is suppressed in gosec but still a firm rule here)
-- Read secrets from Kubernetes `Secret` objects or environment variables — never from ConfigMaps or annotations
-- Do not log secret values; redact before writing to `logrus`
-
-**Cryptography**
-
-- Use `crypto/rand` for all random values that need to be unpredictable — never `math/rand`
-- Prefer `sha256` or stronger for hashing; `crypto/md5` and `crypto/sha1` are blocked by gosec (G401/G505 are suppressed for legacy code only — do not use in new code)
-- TLS: do not set `InsecureSkipVerify: true` in new code (G402 is suppressed for existing compatibility code only)
-
-**File and OS operations**
-
-- Create new files with permissions `0600` or tighter (G306 is configured to flag anything above `0644`)
-- Use `os.CreateTemp` instead of predictable temp file paths
-
-**Kubernetes-specific**
-
-- Never grant `cluster-admin` or wildcard RBAC rules from controller code; request only the minimum verbs/resources needed
-- Treat all data read from Kubernetes API objects (annotations, labels, spec fields) as untrusted input
-- Use `apierrors` helpers instead of string-matching on error messages to avoid brittle security checks
-
-**HTTP and network**
-
-- Always pass a `context.Context` with a deadline to outbound HTTP calls; never use `http.DefaultClient` directly in production code
-- Validate webhook payloads using the admission review API types — never parse raw JSON from an HTTP body in a webhook handler
 
 ## Settings Pattern
 
