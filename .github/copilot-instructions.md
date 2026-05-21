@@ -2,6 +2,8 @@
 
 This repo is the Harvester API server — a Go binary implementing Kubernetes controllers, admission webhooks, and REST API handlers for the Harvester HCI platform. See `AGENTS.md` for full project context, repo structure, and build commands.
 
+When reviewing code, use the conventions outlined below to ensure consistency and maintainability. Pay particular attention to the [Security Checks](#security-checks) section below.
+
 ## Go Conventions
 
 - Go version: see `go.mod` (`go` directive)
@@ -16,16 +18,7 @@ This repo is the Harvester API server — a Go binary implementing Kubernetes co
 - Use **Rancher Wrangler v3** patterns (`github.com/rancher/wrangler/v3`) — not controller-runtime
 - Access controller clients exclusively via `config.Management.*Factory` — never instantiate client-go clients directly
 - Controller handler names (second arg to `OnChange`/`OnRemove`) must be kebab-case and unique within a package
-- Use `apierrors.IsNotFound(err)` before assuming a resource is missing — never check `err == nil` alone on Get calls
 - Return the object (modified or unmodified) from `OnChange` handlers; Wrangler uses the return value for re-queuing
-
-## Code Generation
-
-When adding or modifying a type in `pkg/apis/harvesterhci.io/v1beta1/`:
-
-1. Add required codegen markers: `// +genclient` and `// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object`
-2. Run `go generate ./...` from repo root
-3. Commit all changes in `pkg/generated/` and `pkg/apis/harvesterhci.io/v1beta1/zz_generated_*.go`
 
 ## Test Conventions
 
@@ -35,128 +28,29 @@ When adding or modifying a type in `pkg/apis/harvesterhci.io/v1beta1/`:
 - Reference pattern: `pkg/controller/master/supportbundle/controller_test.go`
 - Every new controller must have unit tests; new features must not reduce test coverage
 
-## PR and Commit Conventions
+## Security Checks
 
-- Every commit must include `Signed-off-by: Name <email>` — use `git commit -s`
-- Every PR must reference an existing issue: use `Issue #N` or `Issue harvester/harvester#N` (never `Fixes #N`, which auto-closes on merge)
-- Target the `master` branch for all PRs
-- If AI tools were used: disclose in the PR description; address all AI-generated review comments before requesting maintainer review; do not use AI to respond to reviewer feedback
+- For Go code, see the `golang-sec-instructions.md` file for gosec and govulncheck check criteria
+- For shell scripts, see the `bash-sec-instructions.md` file for common shell script
+- Skip security checks for files that do not contain executable code (e.g., markdown, YAML, JSON, etc.) or files that are auto-generated or vendored
 
-## Code Review — Security Checks
+### Security review summary
 
-When reviewing any pull request, perform the following security checks on all changed Go files (skip `vendor/`, `pkg/generated/`, `*zz_generated*`, `*_generated*`).
+Always provide a security review summary in the review comment, even if no issues are found.
 
-Always provide a security summary in the review comment, even if no issues are found.
+The summary should include:
 
-### 1. Evaluate active gosec rules
-
-Check changed code against every gosec rule that is **not** suppressed in `.golangci.yaml`. The currently suppressed rules are G108, G401, G402  — all others are in force. Pay particular attention to:
-
-| Rule | What to look for |
-|------|-----------------|
-| G102 | Binding to all network interfaces (`0.0.0.0`) without justification |
-| G103 | Use of `unsafe` package |
-| G104 | Errors unhandled (complements `errcheck`) |
-| G107 | URL built from variable input passed to HTTP request — flag if not validated |
-| G201 / G202 | SQL query string built with `fmt.Sprintf` or string concatenation |
-| G204 | `exec.Command` called with variable arguments — verify args are not user-controlled |
-| G304 | File path opened from variable — check for path traversal |
-| G305 | File path from `Zip`/`Tar` entry — flag if extraction destination is not sanitised |
-| G306 | File created with permissions above `0644` (threshold set in `.golangci.yaml`) |
-| G307 | `defer` on a function that returns an error without the error being checked |
-| G404 | `math/rand` used instead of `crypto/rand` for security-sensitive values |
-| G501–G504 | Imports of `crypto/md5`, `crypto/sha1`, `crypto/des`, `crypto/rc4` |
-| G601 | Implicit memory aliasing in `for` loop (pre-Go 1.22 semantics) |
-
-For each finding, cite the file, line, rule ID, and a short explanation of the risk.
-
-### 2. Run govulncheck
-
-Run `govulncheck` against the changed packages to detect known CVEs in the module dependency graph:
-
-```bash
-# Install if not present
-go install golang.org/x/vuln/cmd/govulncheck@latest
-
-# Scan all packages (uses vendored modules automatically)
-govulncheck ./...
-
-# Scan only the packages touched by the PR
-govulncheck github.com/harvester/harvester/<changed-package-path>/...
-```
-
-Report any vulnerabilities found: CVE ID, affected symbol, affected package, and whether the vulnerable code path is reachable from the changed code. If `govulncheck` reports a vulnerability in a transitive dependency that the PR did not introduce, note it but mark it as pre-existing.
-
-### 3. Check shell script vulnerabilities
-
-When changes are made to shell scripts in the `scripts/` or `package/` folders, review them for common shell script security vulnerabilities.
-
-The `shellcheck` tool can be used to automate some of this analysis:
-
-```bash
-
-| Issue | What to look for |
-|-------|-----------------|
-| **Unquoted variables** | Variables used without quotes (e.g., `$var` instead of `"$var"`) — can cause word splitting and glob expansion |
-| **Command injection** | User input or variables interpolated into commands without sanitization — especially with `eval`, backticks, or `$(...)` |
-| **Path traversal** | File paths constructed from input without validation — check for `..` sequences and absolute path handling |
-| **Unsafe `eval`** | Any use of `eval` with user-controlled input or variables |
-| **Unchecked commands** | Commands that can fail silently — ensure `set -e` or explicit error checking with `|| exit 1` |
-| **Insecure temp files** | Predictable temp file names instead of `mktemp` — can lead to race conditions |
-| **World-writable files** | Files/directories created with overly permissive permissions (666, 777) |
-| **Missing input validation** | Script arguments (`$1`, `$2`, etc.) used without validation or bounds checking |
-| **Unsafe downloads** | `curl` or `wget` without integrity checks (checksum validation) or used with `| sh` |
-| **Secret exposure** | Secrets/credentials in script output, logs, or error messages |
-| **Missing ShellCheck** | Scripts not validated with ShellCheck — recommend running `shellcheck script.sh` |
-
-**Common safe patterns:**
-
-- Always quote variables: `"$VAR"` not `$VAR`
-- Use `set -euo pipefail` at script start for safer error handling
-- Validate arguments: `[[ -z "${1:-}" ]] && { echo "Error: missing argument"; exit 1; }`
-- Use `mktemp` for temporary files: `temp_file=$(mktemp)`
-- Check command success: `command || { echo "command failed"; exit 1; }`
-- Use arrays for commands with arguments: `cmd=("binary" "arg1" "arg2"); "${cmd[@]}"`
-
-For each shell script finding, cite the file, line number, issue type, and recommended fix.
-
-### 4. Summary format
-
-After the checks, include a security summary block in your review:
+- The results of each check (pass/fail)
+- The number of findings
+- A brief list of rule IDs or issue types or deprecated packages, as applicable
+- If any pre-existing issues were noted during the review, list them as well
+- Use the following format for the summary:
 
 ```
-
 **Security review**
 
 - gosec (active rules): [PASS | N findings — list rule IDs]
-- govulncheck: [PASS | N vulnerabilities — list CVE IDs]
-- shell scripts (scripts/, package/): [PASS | N issues — list types] (if applicable)
-- Pre-existing issues noted: [none | list]
-
+- deprecated packages: [PASS | N violations - name and version of each deprecated package]
+- shell scripts: [PASS | N issues — list types] (if applicable)
+- pre-existing issues noted: [none | list]
 ```
-
-## Settings Pattern
-
-Global Harvester settings are exported `Setting` variables in `pkg/settings/`. When adding a new setting:
-
-1. Add an exported `var` of type `settings.Setting` with a default value
-2. Use `.Get()` to read the value in controllers — never hardcode setting values
-3. Consider data migration for existing clusters when changing default values
-
-## Maintenance Matrix
-
-When you change one of these, you must also update the corresponding files:
-
-| Change | Also update |
-|--------|------------|
-| New CRD type in `pkg/apis/harvesterhci.io/v1beta1/` | Run `go generate ./...` → `pkg/generated/`, `zz_generated_deepcopy.go`, `zz_generated_register.go`, `deploy/charts/harvester-crd/` manifests |
-| New master controller in `pkg/controller/master/{resource}/` | Add `{resource}.Register` to `registerFuncs` slice in `pkg/controller/master/setup.go` |
-| New global controller in `pkg/controller/global/` | Add to `pkg/controller/global/register.go` |
-| New REST API handler in `pkg/api/{resource}/` | Register routes in `pkg/server/` (check existing register files in `pkg/server/`) |
-| New admission webhook in `pkg/webhook/admission/{resource}/` | Register validator/mutator in the webhook server setup |
-| New global setting in `pkg/settings/` | Document the default value; assess migration impact for existing clusters |
-| Any `go.mod` dependency change | Run `go mod tidy && go mod vendor`; commit `go.mod`, `go.sum`, and `vendor/` together |
-| `go.mod` `replace` directive change | Verify all Rancher/Wrangler-dependent imports still compile; run `make validate` |
-| New Helm chart value in `deploy/charts/harvester/` | Update `values.yaml`, chart templates, and `README` in the chart directory |
-| New build argument in `Dockerfile` | Forward it via the `DOCKER_BUILD` variable in `Makefile` if needed at build time |
-| New script in `scripts/` | Make executable (`chmod +x`); add a corresponding `make` target if callers need it |
