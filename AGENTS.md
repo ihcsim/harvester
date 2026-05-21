@@ -60,32 +60,16 @@ harvester/
 All build targets run **inside Docker** — a Docker-compatible engine is the only host requirement.
 
 ```bash
-# Compile harvester binaries → ./bin/
-make build
-
-# Run unit tests
-make test
-
-# Run integration tests (starts a test cluster in Docker)
-make test-integration
-
-# Run golangci-lint + go vet
-make validate
-
-# Dirty-check after go generate + go mod tidy (used in CI)
-make validate-ci
-
-# Generate CRD manifests → deploy/charts/harvester-crd/
-make generate-manifest
-
-# Generate OpenAPI/Swagger spec → api/
-make generate-openapi
-
-# Package container images
-make package-all
-
-# Build a Harvester ISO
-make build-iso
+make                  # build binaries, run tests, package all images (default)
+make build            # compile harvester, harvester-webhook, upgrade-helper
+make test             # run unit tests
+make package-all      # build all container images
+make validate         # run linters
+make validate-ci      # dirty-check (go generate + go mod tidy)
+make build-iso        # build the Harvester ISO
+make prepare-addons   # fetch and cache addons repo + generate manifests
+make generate-manifest  # regenerate CRD manifest templates
+make generate-openapi   # regenerate OpenAPI/Swagger spec
 ```
 
 For fast host-side feedback (uses vendored dependencies, no Docker required):
