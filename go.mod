@@ -19,6 +19,8 @@ replace (
 	// handle rancher dependenices
 	go.qase.io/client => github.com/rancher/qase-go/client v0.0.0-20231114201952-65195ec001fa
 
+	golang.org/x/text => golang.org/x/text v0.3.5
+
 	helm.sh/helm/v3 => github.com/rancher/helm/v3 v3.15.1-rancher2
 	k8s.io/api => k8s.io/api v0.33.7
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.33.7
