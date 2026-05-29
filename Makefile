@@ -69,7 +69,7 @@ DOCKER_BUILD = docker build \
 .PHONY: build validate validate-ci test test-integration build-iso \
 	package-all package package-harvester-webhook package-harvester-upgrade \
 	generate-manifest generate-openapi prepare-addons ci arm clean clean-all default \
-	gen-version-env gen-version-env-debug
+	gen-version-env gen-version-env-debug security-scan
 
 
 # ---- Directories ----
@@ -195,3 +195,10 @@ arm: build package-all
 
 ci: validate validate-ci build test package-harvester-webhook package-harvester-upgrade \
 	package
+
+
+# ---- Security scan ----
+security-scan: build
+	$(BANNER)
+	$(DOCKER_BUILD) --target security-scan -t harvester-security-scan:$(MK_REPO_ID)
+	docker run --rm harvester-security-scan:$(MK_REPO_ID) ./scripts/security-scan
