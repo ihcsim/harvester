@@ -69,7 +69,7 @@ DOCKER_BUILD = docker build \
 .PHONY: build validate validate-ci test test-integration build-iso \
 	package-all package package-harvester-webhook package-harvester-upgrade \
 	generate-manifest generate-openapi prepare-addons ci arm clean clean-all default \
-	gen-version-env gen-version-env-debug
+	gen-version-env gen-version-env-debug changelog
 
 
 # ---- Directories ----
@@ -195,3 +195,11 @@ arm: build package-all
 
 ci: validate validate-ci build test package-harvester-webhook package-harvester-upgrade \
 	package
+
+
+# ---- Generate changelog from git history ----
+changelog: build
+	$(BANNER)
+	@echo "Generating changelog from git history..."
+	@git log --oneline --decorate --graph --since="30 days ago" > $(ROOT)/CHANGELOG.md
+	@echo "Changelog generated: $(ROOT)/CHANGELOG.md"
